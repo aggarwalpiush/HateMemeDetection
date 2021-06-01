@@ -1,46 +1,64 @@
-# HatefulMemes
+# HateMemeDetection
 
-## Intro
+This is the code for our submission for Task A to the Shared Task on Hateful Memes Detection at WOAH 2021. It is built on top of the [winning system](https://github.com/HimariO/HatefulMemesChallenge) of a previous hateful memes binary classification shared task.
 
-This is the source code of FacebookAI HatefulMemes challenge first place solution. In this comeptetion, we using multiple type of annotation extracted from hateful-memes dataset and feed those data into multi-modal transformers to achieve high accuracy. You can read about the detail of our approch in:
+## Dataset Download
 
-* Paper [Enhance Multimodal Transformer With External Label And In-Domain Pretrain](https://arxiv.org/abs/2012.08290)
-* [Sild of NeurIPS 2020 competition track event](https://docs.google.com/presentation/d/1734v8OvnKyjwAlCQj605UayZEARa63hN3Hvn1ISI4r8/edit?usp=sharing)
+The original memes dataset could be downloaded from [Facebook](https://www.drivendata.org/competitions/64/hateful-memes).
 
-## Dependency
+The augmented images could be downloaded [here](https://uni-duisburg-essen.sciebo.de/s/FfYDT9iLGjLqkQL).
 
-* Docker >= 19.0.3
-* [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia-docker#quickstart).
+After both folders are downloaded, merge them together in a folder called `data/hateful_memes/img`.
 
-**NOTE:** Make sure you follow this [guide](https://docs.docker.com/engine/install/linux-postinstall/) to let docker run as root, so it can be run by shell scripts with out ```sudo```.
+## Training
 
-## System sepc
+Use the following command to train:
 
-Original experiement was conduct on `GCP n1-highmem-16` instance init with `TensorFlow2.3/Keras.CUDA11.0.GPU` GCE Image:
+```bash
+bash VL-BERT/run_train.sh
+```
 
-* OS: Ubuntu 18.04.5 LTS
-* CPU: 16 Core Intel CPU
-* Memory: 104 GB
-* GPU: 4 Nvidia T4
-* Disk: 500GB HDD
+CSV and JSON inference results will be located at `checkpoints/vl-bert/{MODEL_NAME}/{CONFIG_NAME}`.
 
-Most of the data preprocessing and model training could be done with only 1 T4 GPU, except VL-BERT need 4 GPU to achieve high enough batch size when fine-tuning Faster-RCNN & BERT togather. \
-**NOTE:** All models used in this project is using fp16 acceleration during training. Please use GPU support NVDIA AMP.
+### **Pre-trained VL-BERT Model**
 
-## Steps
+Download the pre-trained VL-BERT model [here](https://drive.google.com/file/d/15IAT7NVCXtTj_9itl7OXtA_jXRwiaVWZ/view).
 
-1. Data preprocess and extract additional features. See detailed instruction at [data_utils/README](data_utils/README.md).
+After downloading, place the models in the folder `pretrain_model`.
 
-2. Train modified VL-BERT(2 large one and 1 base one). See detailed instruction at [VL-BERT/README](VL-BERT/README.md).
+### **Training Configurations**
 
-3. Train UNITER-ITM(1 large one and 1 base one) and VILLA-ITM(1 large one and 1 base one). See detailed instruction at [UNITER/README](UNITER/README.md).
+Path to the training config file: `VL-BERT/cfgs/cls`.
 
-4. Train ERNIE-Vil(1 large one and 1 base one). See detailed instruction at [ERNIE-VIL/README](ERNIE-Vil/README.md).
+Path to the dataset config file: `VL-BERT/cls/data/datasets`.
 
-5. Ensemble by average predictions of all model then apply simple rule-base racism detector on top of it.
 
-    ```bash
-    bash run_ensemble.sh
-    ```
+ VL-BERT Large                    | Training config file    | Dataset config file        | Box annotations  | Train/Val set  |
+| ------------------------ |:-------------------|:------------ | :------------- | :------------- |
+| +W | large_4x14G_fp32_k8s_v4.yaml | cls_v2.py            | box_annos.json   | train.entity.jsonl |
+| +W,RG | large_4x14G_fp32_k8s_v5_race.yaml | cls_v3.py            | box_annos.race.json   | train.entity.jsonl |
+| +W,E | large_4x14G_fp32_k8s_v5_emotion.yaml | cls_v5.py            | box_annos.emotion.json   | train.entity.jsonl |
+| +W,RG,E | large_4x14G_fp32_k8s_v5_race_emotion.yaml | cls_v4.py            | box_annos.race_emotion.json   | train.entity.jsonl |
+| U&#124;+W | large_4x14G_fp32_k8s_v4.yaml | cls_v2.py            | box_annos.json   | train_undersampled.entity.jsonl |
+| U&#124;+W,RG | large_4x14G_fp32_k8s_v5_race.yaml | cls_v3.py            | box_annos.race.json   | train_undersampled.entity.jsonl |
+| I&#124;+W | large_4x14G_fp32_k8s_v4.yaml | cls_v2.py            | box_annos_imgaug.json   | train_imgaug.entity.jsonl |
+| I&#124;+W,RG | large_4x14G_fp32_k8s_v5_race.yaml | cls_v3.py            | box_annos_imgaug.race.json   | train_imgaug.entity.jsonl |
+| T&#124;+W | large_4x14G_fp32_k8s_v4.yaml | cls_v2.py            | box_annos.json   | train_textaug.entity.jsonl |
+| I&#124;+W,RG | large_4x14G_fp32_k8s_v5_race.yaml | cls_v3.py            | box_annos.race.json   | train_textaug.entity.jsonl |
+| IT&#124;+W | large_4x14G_fp32_k8s_v4.yaml | cls_v2.py            | box_annos_imgaug.json   | train_imgtextaug.entity.jsonl |
+| I&#124;+W,RG | large_4x14G_fp32_k8s_v5_race.yaml | cls_v3.py            | box_annos_imgaug.race.json   | train_imgtextaug.entity.jsonl |
 
-    This script will let you select the predition of different model to taken into ensemble. As result it will output `ROOT/test_set_ensemble.csv` as final result and copy all the csv files used in ensemble to `ROOT/test_set_csvs` folder.
+
+Note: W = Web Entities, RG = Race and Gender, E = Emotion, U = Undersampling, I = Image Augmentation, IT = Image and Text Augmentation
+
+
+Results in the paper are tested on `dev_all.entity.jsonl`.
+
+
+For training, the original train set is split into two sets — `train1` as the training set and `train2` as the validation set. If you want to replicate the results in the paper, use `train1(_<aug>).entity.jsonl` as the training set and `train2(_<aug>).entity.jsonl` as the validation set. For example: For text augmentation, training set: `train1_textaug.entity.jsonl` and validation set: `train2_textaug.entity.jsonl`.
+
+
+The used box annotations and train/val sets must be specified inside the Python dataset config file `cls_v<version>.py`.
+
+
+You can specify which split should be used as train, val, and test sets in the training config file. For example, "`train1`" corresponds to any `train1(_<aug>).entity.jsonl`, "val_all" corresponds `dev_all.entity.jsonl`.
